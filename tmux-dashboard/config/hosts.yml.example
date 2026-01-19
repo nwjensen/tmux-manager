@@ -1,0 +1,69 @@
+# TMUX Fleet Dashboard Configuration
+# Copy this file to hosts.yml and edit with your actual hosts
+
+# How often to poll hosts for data (seconds)
+polling_interval_seconds: 30
+
+# Sessions detached longer than this are marked "legacy"
+legacy_threshold_hours: 72
+
+# Alert configuration
+alerts:
+  enabled: true
+  
+  # Session thresholds
+  session_cpu_warning: 80        # % CPU usage
+  session_memory_mb_warning: 2048  # MB memory usage
+  
+  # Host thresholds
+  host_cpu_warning: 90           # % CPU usage
+  host_memory_warning: 90        # % memory usage
+  
+  # GPU thresholds (NVIDIA only)
+  gpu_temp_warning: 80           # °C - warning level
+  gpu_temp_critical: 90          # °C - critical level
+  gpu_memory_warning: 90         # % VRAM usage
+  gpu_util_info: 95              # % utilization (info only)
+
+# SSH configuration for connecting to fleet hosts
+ssh:
+  user: tmux-dash
+  key_path: /opt/tmux-dashboard/.ssh/id_ed25519
+  timeout: 10                    # Connection timeout in seconds
+  known_hosts_policy: accept     # accept, reject, or path to known_hosts file
+
+# Fleet hosts to monitor
+# Add all hosts you want to monitor here
+hosts:
+  # Proxmox nodes with GPUs
+  - name: pve1
+    address: 192.168.1.10        # IP address or hostname
+    has_gpu: true                # Set true if host has NVIDIA GPU
+    tags:                        # Optional tags for filtering
+      - proxmox
+      - primary
+    
+  - name: pve2
+    address: 192.168.1.11
+    has_gpu: true
+    tags:
+      - proxmox
+      
+  # Raspberry Pi nodes (no GPU)
+  - name: pi-01
+    address: 192.168.1.50
+    has_gpu: false
+    tags:
+      - raspberry-pi
+      - nodus
+      - edge
+      
+  - name: pi-02
+    address: 192.168.1.51
+    has_gpu: false
+    tags:
+      - raspberry-pi
+      - edge
+
+# Note: After editing this file, restart the service:
+#   systemctl restart tmux-dashboard

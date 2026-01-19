@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMUX Fleet Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Dark industrial palette */
+            --bg-primary: #0a0e14;
+            --bg-secondary: #0d1117;
+            --bg-card: #151b23;
+            --bg-card-hover: #1a222c;
+            --bg-inset: #0a0d10;
+            
+            /* Borders and lines */
+            --border-subtle: #21262d;
+            --border-default: #30363d;
+            --border-emphasis: #484f58;
+            
+            /* Text */
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            
+            /* Status colors */
+            --status-online: #238636;
+            --status-online-bg: rgba(35, 134, 54, 0.15);
+            --status-warning: #d29922;
+            --status-warning-bg: rgba(210, 153, 34, 0.15);
+            --status-critical: #da3633;
+            --status-critical-bg: rgba(218, 54, 51, 0.15);
+            --status-offline: #6e7681;
+            --status-offline-bg: rgba(110, 118, 129, 0.15);
+            
+            /* Accent */
+            --accent-blue: #58a6ff;
+            --accent-purple: #a371f7;
+            --accent-cyan: #39c5cf;
+            
+            /* GPU specific */
+            --gpu-power: #f0883e;
+            --gpu-temp: #da3633;
+            --gpu-vram: #a371f7;
+            --gpu-util: #58a6ff;
+            
+            /* Typography */
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-sans: 'IBM Plex Sans', -apple-system, sans-serif;
+            
+            /* Spacing */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            
+            /* Radii */
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-default);
+            padding: var(--space-md) var(--space-lg);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-md);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+        
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .logo-text {
+            font-family: var(--font-mono);
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: var(--space-lg);
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--status-offline);
+        }
+        
+        .connection-dot.connected {
+            background: var(--status-online);
+            box-shadow: 0 0 8px var(--status-online);
+        }
+        
+        .alert-badge {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-xs) var(--space-sm);
+            background: var(--status-warning-bg);
+            border: 1px solid var(--status-warning);
+            border-radius: var(--radius-md);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--status-warning);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        
+        .alert-badge:hover {
+            background: rgba(210, 153, 34, 0.25);
+        }
+        
+        .alert-badge.critical {
+            background: var(--status-critical-bg);
+            border-color: var(--status-critical);
+            color: var(--status-critical);
+        }
+        
+        .alert-badge.none {
+            background: var(--status-online-bg);
+            border-color: var(--status-online);
+            color: var(--status-online);
+        }
+        
+        /* Alert Banner */
+        .alert-banner {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-default);
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        
+        .alert-banner.expanded {
+            max-height: 300px;
+        }
+        
+        .alert-banner-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: var(--space-md) var(--space-lg);
+        }
+        
+        .alert-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+        
+        .alert-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            border-left: 3px solid var(--status-warning);
+        }
+        
+        .alert-item.critical {
+            border-left-color: var(--status-critical);
+            background: var(--status-critical-bg);
+        }
+        
+        .alert-item.acknowledged {
+            opacity: 0.5;
+        }
+        
+        .alert-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+        
+        .alert-icon {
+            font-size: 16px;
+        }
+        
+        .alert-message {
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+        
+        .alert-host {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+        
+        .alert-ack-btn {
+            padding: var(--space-xs) var(--space-sm);
+            background: transparent;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        
+        .alert-ack-btn:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-emphasis);
+            color: var(--text-primary);
+        }
+        
+        /* Tabs */
+        .tabs {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-default);
+            padding: 0 var(--space-lg);
+        }
+        
+        .tabs-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            gap: var(--space-xs);
+        }
+        
+        .tab {
+            padding: var(--space-md) var(--space-lg);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-family: var(--font-sans);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        
+        .tab:hover {
+            color: var(--text-primary);
+        }
+        
+        .tab.active {
+            color: var(--text-primary);
+            border-bottom-color: var(--accent-cyan);
+        }
+        
+        .tab-count {
+            margin-left: var(--space-xs);
+            padding: 2px 6px;
+            background: var(--bg-inset);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+        
+        /* Main Content */
+        .main {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: var(--space-lg);
+        }
+        
+        /* Host Grid */
+        .host-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: var(--space-lg);
+        }
+        
+        .host-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            transition: border-color 0.15s ease;
+        }
+        
+        .host-card:hover {
+            border-color: var(--border-default);
+        }
+        
+        .host-card.offline {
+            opacity: 0.6;
+        }
+        
+        .host-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        
+        .host-name {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-family: var(--font-mono);
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .host-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--status-online);
+        }
+        
+        .host-status-dot.offline {
+            background: var(--status-offline);
+        }
+        
+        .host-status-dot.degraded {
+            background: var(--status-warning);
+        }
+        
+        .host-tags {
+            display: flex;
+            gap: var(--space-xs);
+        }
+        
+        .host-tag {
+            padding: 2px 6px;
+            background: var(--bg-inset);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        
+        /* Metrics */
+        .host-metrics {
+            padding: var(--space-md);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        
+        .metric {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+        
+        .metric-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .metric-bar {
+            height: 6px;
+            background: var(--bg-inset);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .metric-bar-fill {
+            height: 100%;
+            background: var(--accent-cyan);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        
+        .metric-bar-fill.warning {
+            background: var(--status-warning);
+        }
+        
+        .metric-bar-fill.critical {
+            background: var(--status-critical);
+        }
+        
+        .metric-value {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        /* GPU Panel */
+        .gpu-panel {
+            padding: var(--space-md);
+            background: var(--bg-inset);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        
+        .gpu-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-sm);
+        }
+        
+        .gpu-name {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        
+        .gpu-temp {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .gpu-temp.warning {
+            color: var(--status-warning);
+        }
+        
+        .gpu-temp.critical {
+            color: var(--status-critical);
+        }
+        
+        .gpu-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-sm);
+        }
+        
+        .gpu-metric {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .gpu-metric-label {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        
+        .gpu-metric-value {
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+        
+        .gpu-metric-bar {
+            height: 4px;
+            background: var(--bg-secondary);
+            border-radius: 2px;
+            margin-top: 2px;
+        }
+        
+        .gpu-metric-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+        
+        .gpu-metric-bar-fill.power {
+            background: var(--gpu-power);
+        }
+        
+        .gpu-metric-bar-fill.vram {
+            background: var(--gpu-vram);
+        }
+        
+        .gpu-metric-bar-fill.util {
+            background: var(--gpu-util);
+        }
+        
+        .gpu-processes {
+            margin-top: var(--space-sm);
+            padding-top: var(--space-sm);
+            border-top: 1px solid var(--border-subtle);
+        }
+        
+        .gpu-process {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            padding: 2px 0;
+        }
+        
+        .gpu-process-name {
+            color: var(--text-primary);
+        }
+        
+        /* Sessions */
+        .sessions-list {
+            padding: var(--space-md);
+        }
+        
+        .sessions-header {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: var(--space-sm);
+        }
+        
+        .session-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-sm);
+            background: var(--bg-inset);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-xs);
+        }
+        
+        .session-item.legacy {
+            border-left: 2px solid var(--status-warning);
+        }
+        
+        .session-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+        
+        .session-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--status-online);
+        }
+        
+        .session-status.detached {
+            background: var(--status-offline);
+        }
+        
+        .session-name {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .session-meta {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        
+        .session-actions {
+            display: flex;
+            gap: var(--space-xs);
+        }
+        
+        .session-btn {
+            padding: var(--space-xs) var(--space-sm);
+            background: transparent;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-decoration: none;
+        }
+        
+        .session-btn:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-emphasis);
+            color: var(--text-primary);
+        }
+        
+        .session-btn.danger:hover {
+            border-color: var(--status-critical);
+            color: var(--status-critical);
+        }
+        
+        /* No sessions state */
+        .no-sessions {
+            padding: var(--space-lg);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        
+        /* Loading state */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-xl);
+            color: var(--text-muted);
+        }
+        
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-default);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: var(--space-sm);
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: var(--space-xl) * 2;
+            color: var(--text-muted);
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: var(--space-md);
+            opacity: 0.5;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .host-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-content {
+                flex-wrap: wrap;
+            }
+            
+            .gpu-metrics {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Command modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+        }
+        
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .modal-title {
+            font-family: var(--font-mono);
+            font-size: 16px;
+            margin-bottom: var(--space-md);
+        }
+        
+        .modal-command {
+            background: var(--bg-inset);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            word-break: break-all;
+            margin-bottom: var(--space-md);
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: var(--space-sm);
+            justify-content: flex-end;
+        }
+        
+        .modal-btn {
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-inset);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        
+        .modal-btn:hover {
+            background: var(--bg-card-hover);
+        }
+        
+        .modal-btn.primary {
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            color: var(--bg-primary);
+        }
+        
+        .modal-btn.primary:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">TX</div>
+                <span class="logo-text">TMUX Fleet</span>
+            </div>
+            <div class="header-status">
+                <div class="connection-status">
+                    <span class="connection-dot" id="connectionDot"></span>
+                    <span id="connectionText">Connecting...</span>
+                </div>
+                <button class="alert-badge none" id="alertBadge" onclick="toggleAlertBanner()">
+                    <span>⚠</span>
+                    <span id="alertCount">0 alerts</span>
+                </button>
+            </div>
+        </div>
+    </header>
+    
+    <div class="alert-banner" id="alertBanner">
+        <div class="alert-banner-content">
+            <div class="alert-list" id="alertList">
+                <!-- Alerts rendered here -->
+            </div>
+        </div>
+    </div>
+    
+    <nav class="tabs">
+        <div class="tabs-content">
+            <button class="tab active" data-tab="all" onclick="switchTab('all')">
+                All Hosts
+                <span class="tab-count" id="allCount">0</span>
+            </button>
+            <button class="tab" data-tab="active" onclick="switchTab('active')">
+                Active Sessions
+                <span class="tab-count" id="activeCount">0</span>
+            </button>
+            <button class="tab" data-tab="legacy" onclick="switchTab('legacy')">
+                Legacy Sessions
+                <span class="tab-count" id="legacyCount">0</span>
+            </button>
+        </div>
+    </nav>
+    
+    <main class="main">
+        <div class="host-grid" id="hostGrid">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                Loading hosts...
+            </div>
+        </div>
+    </main>
+    
+    <!-- Command Modal -->
+    <div class="modal-overlay" id="commandModal">
+        <div class="modal">
+            <div class="modal-title">Attach to Session</div>
+            <div class="modal-command" id="commandText"></div>
+            <div class="modal-actions">
+                <button class="modal-btn" onclick="closeModal()">Close</button>
+                <button class="modal-btn primary" onclick="copyCommand()">Copy Command</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // State
+        let state = {
+            hosts: [],
+            alerts: [],
+            connected: false,
+            currentTab: 'all',
+            sshUser: 'tmux-dash'
+        };
+        
+        let ws = null;
+        let reconnectAttempts = 0;
+        
+        // WebSocket connection
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                state.connected = true;
+                reconnectAttempts = 0;
+                updateConnectionStatus();
+            };
+            
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleMessage(message);
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                state.connected = false;
+                updateConnectionStatus();
+                
+                // Reconnect with exponential backoff
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                reconnectAttempts++;
+                setTimeout(connectWebSocket, delay);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+        
+        function handleMessage(message) {
+            switch (message.event) {
+                case 'connected':
+                case 'hosts_update':
+                    state.hosts = message.data.hosts || [];
+                    state.alerts = message.data.alerts || [];
+                    render();
+                    break;
+                case 'alert_acknowledged':
+                    const alertId = message.data.id;
+                    const alert = state.alerts.find(a => a.id === alertId);
+                    if (alert) alert.acknowledged = true;
+                    renderAlerts();
+                    break;
+                case 'ping':
+                    // Keep-alive, no action needed
+                    break;
+            }
+        }
+        
+        function updateConnectionStatus() {
+            const dot = document.getElementById('connectionDot');
+            const text = document.getElementById('connectionText');
+            
+            if (state.connected) {
+                dot.classList.add('connected');
+                text.textContent = 'Connected';
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Reconnecting...';
+            }
+        }
+        
+        // Rendering
+        function render() {
+            renderHosts();
+            renderAlerts();
+            updateCounts();
+        }
+        
+        function renderHosts() {
+            const grid = document.getElementById('hostGrid');
+            const filteredHosts = filterHosts();
+            
+            if (filteredHosts.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🖥️</div>
+                        <p>No hosts to display</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            grid.innerHTML = filteredHosts.map(host => renderHostCard(host)).join('');
+        }
+        
+        function filterHosts() {
+            if (state.currentTab === 'all') {
+                return state.hosts;
+            }
+            
+            const status = state.currentTab;
+            return state.hosts.filter(host => 
+                host.sessions.some(s => s.status === status)
+            );
+        }
+        
+        function renderHostCard(host) {
+            const isOffline = host.status === 'offline';
+            const sessions = filterSessions(host.sessions);
+            
+            return `
+                <div class="host-card ${isOffline ? 'offline' : ''}">
+                    <div class="host-header">
+                        <div class="host-name">
+                            <span class="host-status-dot ${host.status}"></span>
+                            ${host.hostname}
+                        </div>
+                        <div class="host-tags">
+                            ${host.tags.map(tag => `<span class="host-tag">${tag}</span>`).join('')}
+                        </div>
+                    </div>
+                    
+                    ${!isOffline ? `
+                        <div class="host-metrics">
+                            <div class="metric">
+                                <span class="metric-label">CPU</span>
+                                <div class="metric-bar">
+                                    <div class="metric-bar-fill ${getMetricClass(host.cpu_percent)}" 
+                                         style="width: ${host.cpu_percent}%"></div>
+                                </div>
+                                <span class="metric-value">${host.cpu_percent.toFixed(1)}%</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Memory</span>
+                                <div class="metric-bar">
+                                    <div class="metric-bar-fill ${getMetricClass(host.memory_percent)}" 
+                                         style="width: ${host.memory_percent}%"></div>
+                                </div>
+                                <span class="metric-value">${host.memory_percent.toFixed(1)}% (${formatMB(host.memory_used_mb)} / ${formatMB(host.memory_total_mb)})</span>
+                            </div>
+                        </div>
+                        
+                        ${host.gpus.length > 0 ? host.gpus.map(gpu => renderGPU(gpu)).join('') : ''}
+                    ` : `
+                        <div class="no-sessions">
+                            <p>Host offline</p>
+                            ${host.error_message ? `<p style="font-size: 11px; margin-top: 8px;">${host.error_message}</p>` : ''}
+                        </div>
+                    `}
+                    
+                    <div class="sessions-list">
+                        <div class="sessions-header">Sessions (${sessions.length})</div>
+                        ${sessions.length > 0 ? sessions.map(s => renderSession(host, s)).join('') : `
+                            <div class="no-sessions">No sessions</div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderGPU(gpu) {
+            const tempClass = gpu.temperature_c >= 90 ? 'critical' : gpu.temperature_c >= 80 ? 'warning' : '';
+            const memPercent = (gpu.memory_used_mb / gpu.memory_total_mb * 100).toFixed(0);
+            const powerPercent = (gpu.power_draw_watts / gpu.power_limit_watts * 100).toFixed(0);
+            
+            return `
+                <div class="gpu-panel">
+                    <div class="gpu-header">
+                        <span class="gpu-name">${gpu.name}</span>
+                        <span class="gpu-temp ${tempClass}">🌡️ ${gpu.temperature_c}°C</span>
+                    </div>
+                    <div class="gpu-metrics">
+                        <div class="gpu-metric">
+                            <span class="gpu-metric-label">Power</span>
+                            <span class="gpu-metric-value">⚡ ${gpu.power_draw_watts.toFixed(0)}W / ${gpu.power_limit_watts.toFixed(0)}W</span>
+                            <div class="gpu-metric-bar">
+                                <div class="gpu-metric-bar-fill power" style="width: ${powerPercent}%"></div>
+                            </div>
+                        </div>
+                        <div class="gpu-metric">
+                            <span class="gpu-metric-label">VRAM</span>
+                            <span class="gpu-metric-value">${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}</span>
+                            <div class="gpu-metric-bar">
+                                <div class="gpu-metric-bar-fill vram" style="width: ${memPercent}%"></div>
+                            </div>
+                        </div>
+                        <div class="gpu-metric">
+                            <span class="gpu-metric-label">Utilization</span>
+                            <span class="gpu-metric-value">${gpu.utilization_percent}%</span>
+                            <div class="gpu-metric-bar">
+                                <div class="gpu-metric-bar-fill util" style="width: ${gpu.utilization_percent}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    ${gpu.processes.length > 0 ? `
+                        <div class="gpu-processes">
+                            ${gpu.processes.map(p => `
+                                <div class="gpu-process">
+                                    <span class="gpu-process-name">${p.name}</span>
+                                    <span>${formatMB(p.memory_mb)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        function renderSession(host, session) {
+            const isLegacy = session.status === 'legacy';
+            const age = formatAge(session.created);
+            
+            return `
+                <div class="session-item ${isLegacy ? 'legacy' : ''}">
+                    <div class="session-info">
+                        <span class="session-status ${session.attached ? '' : 'detached'}"></span>
+                        <span class="session-name">${session.name}</span>
+                        <span class="session-meta">${session.window_count} win · ${age}</span>
+                    </div>
+                    <div class="session-actions">
+                        <button class="session-btn" onclick="showAttachCommand('${host.hostname}', '${host.address}', '${session.name}')">
+                            attach
+                        </button>
+                        ${isLegacy ? `
+                            <button class="session-btn danger" onclick="killSession('${session.id}', '${session.name}')">
+                                kill
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function filterSessions(sessions) {
+            if (state.currentTab === 'all') return sessions;
+            return sessions.filter(s => s.status === state.currentTab);
+        }
+        
+        function renderAlerts() {
+            const list = document.getElementById('alertList');
+            const badge = document.getElementById('alertBadge');
+            const countEl = document.getElementById('alertCount');
+            
+            const unacked = state.alerts.filter(a => !a.acknowledged);
+            const hasCritical = unacked.some(a => a.severity === 'critical');
+            
+            badge.className = 'alert-badge ' + (unacked.length === 0 ? 'none' : hasCritical ? 'critical' : '');
+            countEl.textContent = `${unacked.length} alert${unacked.length !== 1 ? 's' : ''}`;
+            
+            if (state.alerts.length === 0) {
+                list.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No alerts</p>';
+                return;
+            }
+            
+            list.innerHTML = state.alerts.map(alert => `
+                <div class="alert-item ${alert.severity} ${alert.acknowledged ? 'acknowledged' : ''}">
+                    <div class="alert-info">
+                        <span class="alert-icon">${alert.severity === 'critical' ? '🔴' : '⚠️'}</span>
+                        <div>
+                            <div class="alert-message">${alert.message}</div>
+                            <div class="alert-host">${alert.host} · ${formatAge(alert.created)} ago</div>
+                        </div>
+                    </div>
+                    ${!alert.acknowledged ? `
+                        <button class="alert-ack-btn" onclick="acknowledgeAlert('${alert.id}')">
+                            Acknowledge
+                        </button>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+        
+        function updateCounts() {
+            let activeCount = 0;
+            let legacyCount = 0;
+            
+            state.hosts.forEach(host => {
+                host.sessions.forEach(session => {
+                    if (session.status === 'active') activeCount++;
+                    else if (session.status === 'legacy') legacyCount++;
+                });
+            });
+            
+            document.getElementById('allCount').textContent = state.hosts.length;
+            document.getElementById('activeCount').textContent = activeCount;
+            document.getElementById('legacyCount').textContent = legacyCount;
+        }
+        
+        // Actions
+        function switchTab(tab) {
+            state.currentTab = tab;
+            
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === tab);
+            });
+            
+            renderHosts();
+        }
+        
+        function toggleAlertBanner() {
+            const banner = document.getElementById('alertBanner');
+            banner.classList.toggle('expanded');
+        }
+        
+        function showAttachCommand(hostname, address, sessionName) {
+            const command = `ssh ${state.sshUser}@${address} -t 'tmux attach -t ${sessionName}'`;
+            document.getElementById('commandText').textContent = command;
+            document.getElementById('commandModal').classList.add('visible');
+        }
+        
+        function closeModal() {
+            document.getElementById('commandModal').classList.remove('visible');
+        }
+        
+        function copyCommand() {
+            const command = document.getElementById('commandText').textContent;
+            navigator.clipboard.writeText(command).then(() => {
+                const btn = document.querySelector('.modal-btn.primary');
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = original, 1500);
+            });
+        }
+        
+        async function acknowledgeAlert(alertId) {
+            try {
+                const response = await fetch(`/api/alerts/${alertId}/ack`, { method: 'POST' });
+                if (response.ok) {
+                    const alert = state.alerts.find(a => a.id === alertId);
+                    if (alert) alert.acknowledged = true;
+                    renderAlerts();
+                }
+            } catch (err) {
+                console.error('Failed to acknowledge alert:', err);
+            }
+        }
+        
+        async function killSession(sessionId, sessionName) {
+            if (!confirm(`Are you sure you want to kill session "${sessionName}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/kill?confirm=true`, { 
+                    method: 'POST' 
+                });
+                if (response.ok) {
+                    // Session will be removed on next poll
+                    alert(`Session "${sessionName}" killed`);
+                } else {
+                    const data = await response.json();
+                    alert(`Failed to kill session: ${data.detail}`);
+                }
+            } catch (err) {
+                console.error('Failed to kill session:', err);
+                alert('Failed to kill session');
+            }
+        }
+        
+        // Utilities
+        function getMetricClass(value) {
+            if (value >= 90) return 'critical';
+            if (value >= 75) return 'warning';
+            return '';
+        }
+        
+        function formatMB(mb) {
+            if (mb >= 1024) {
+                return (mb / 1024).toFixed(1) + ' GB';
+            }
+            return mb + ' MB';
+        }
+        
+        function formatAge(timestamp) {
+            if (!timestamp) return 'unknown';
+            
+            const date = new Date(timestamp);
+            const now = new Date();
+            const seconds = Math.floor((now - date) / 1000);
+            
+            if (seconds < 60) return `${seconds}s`;
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+            return `${Math.floor(seconds / 86400)}d`;
+        }
+        
+        // Close modal on outside click
+        document.getElementById('commandModal').addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal-overlay')) {
+                closeModal();
+            }
+        });
+        
+        // Close modal on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+        
+        // Initialize
+        connectWebSocket();
+        
+        // Fallback polling if WebSocket fails
+        setInterval(async () => {
+            if (!state.connected) {
+                try {
+                    const response = await fetch('/api/hosts');
+                    const data = await response.json();
+                    state.hosts = data.hosts || [];
+                    
+                    const alertsResponse = await fetch('/api/alerts');
+                    const alertsData = await alertsResponse.json();
+                    state.alerts = alertsData.alerts || [];
+                    
+                    render();
+                } catch (err) {
+                    console.error('Fallback polling failed:', err);
+                }
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

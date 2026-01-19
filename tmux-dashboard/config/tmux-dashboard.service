@@ -1,0 +1,32 @@
+[Unit]
+Description=TMUX Fleet Dashboard
+Documentation=https://github.com/your-repo/tmux-dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=tmux-dash
+Group=tmux-dash
+WorkingDirectory=/opt/tmux-dashboard
+Environment="PATH=/opt/tmux-dashboard/venv/bin:/usr/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/opt/tmux-dashboard/venv/bin/uvicorn backend.app:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tmux-dashboard
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/tmux-dashboard/data
+
+# Resource limits (adjust as needed)
+MemoryMax=512M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target
